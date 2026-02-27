@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { useProfiles, useCreateProfile, useDeleteProfile } from '@/hooks/useProfiles';
+import { useProfiles, useCreateProfile, useDeleteProfile, useUpdateProfile } from '@/hooks/useProfiles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,10 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Trash2, Plus, Search, Upload } from 'lucide-react';
+import { User, Trash2, Plus, Search, Upload, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import * as faceapi from 'face-api.js';
+import type { Profile } from '@/types/profile';
 
 const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
 
@@ -31,10 +38,20 @@ export default function Admin() {
   const { data: profiles = [], isLoading } = useProfiles();
   const createProfile = useCreateProfile();
   const deleteProfile = useDeleteProfile();
+  const updateProfile = useUpdateProfile();
 
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [showForm, setShowForm] = useState(false);
+
+  // Edit state
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesignation, setEditDesignation] = useState('');
+  const [editQualification, setEditQualification] = useState('');
+  const [editRoleType, setEditRoleType] = useState<string>('staff');
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -121,6 +138,75 @@ export default function Admin() {
       toast.error('Failed to create profile.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEdit = (p: Profile) => {
+    setEditingProfile(p);
+    setEditName(p.name);
+    setEditDesignation(p.designation);
+    setEditQualification(p.qualification);
+    setEditRoleType(p.role_type);
+    setEditPhotoFile(null);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProfile || !editName.trim()) return;
+
+    setIsEditing(true);
+    try {
+      let photoUrl = editingProfile.photo_url;
+      let descriptor = editingProfile.face_descriptor;
+
+      if (editPhotoFile) {
+        const ext = editPhotoFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('profile-photos')
+          .upload(fileName, editPhotoFile);
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('profile-photos')
+          .getPublicUrl(fileName);
+        photoUrl = urlData.publicUrl;
+
+        try {
+          await Promise.all([
+            faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          ]);
+          const img = await faceapi.fetchImage(photoUrl);
+          const detection = await faceapi
+            .detectSingleFace(img)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+          descriptor = detection ? Array.from(detection.descriptor) : null;
+          if (!detection) toast.warning('No face detected in new photo.');
+        } catch {
+          toast.warning('Could not extract face data from new photo.');
+        }
+      }
+
+      await updateProfile.mutateAsync({
+        id: editingProfile.id,
+        name: editName.trim(),
+        designation: editDesignation.trim(),
+        qualification: editQualification.trim(),
+        role_type: editRoleType as 'staff' | 'student',
+        photo_url: photoUrl,
+        face_descriptor: descriptor,
+      });
+
+      toast.success(`Profile "${editName}" updated!`);
+      setEditingProfile(null);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      toast.error('Failed to update profile.');
+    } finally {
+      setIsEditing(false);
     }
   };
 
@@ -251,7 +337,7 @@ export default function Admin() {
                   <TableHead>Qualification</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead className="w-20">Face</TableHead>
-                  <TableHead className="w-16" />
+                  <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -301,14 +387,24 @@ export default function Admin() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(p.id, p.name)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEdit(p)}
+                            className="text-muted-foreground hover:text-primary"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(p.id, p.name)}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -318,6 +414,58 @@ export default function Admin() {
           </Card>
         </div>
       </main>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingProfile} onOpenChange={(open) => !open && setEditingProfile(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-designation">Designation</Label>
+              <Input id="edit-designation" value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-qualification">Qualification</Label>
+              <Input id="edit-qualification" value={editQualification} onChange={(e) => setEditQualification(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Role Type</Label>
+              <Select value={editRoleType} onValueChange={setEditRoleType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="student">Student</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="edit-photo">Replace Photo</Label>
+              <Input
+                id="edit-photo"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setEditPhotoFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="col-span-2 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setEditingProfile(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isEditing}>
+                {isEditing ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
