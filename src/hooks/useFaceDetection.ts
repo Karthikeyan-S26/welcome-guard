@@ -142,28 +142,37 @@ export function useFaceDetection(profiles: Profile[]) {
           if (match.label !== 'unknown') {
             const matchedProfile = profiles.find((p) => p.id === match.label);
             if (matchedProfile) {
-              // Draw welcome label
+              // Draw welcome label (mirrored so it reads correctly after scaleX(-1))
               const labelText = `WELCOME ${matchedProfile.name.toUpperCase()}`;
               ctx.font = 'bold 16px Inter, sans-serif';
               const textWidth = ctx.measureText(labelText).width;
               const labelPadding = 12;
               const labelHeight = 32;
-              const labelX = box.x + box.width / 2 - (textWidth + labelPadding * 2) / 2;
+              const totalLabelWidth = textWidth + labelPadding * 2;
+              const labelCenterX = box.x + box.width / 2;
               const labelY = box.y - labelHeight - 8;
+
+              // Save, flip horizontally around label center so text reads correctly
+              ctx.save();
+              ctx.translate(labelCenterX, 0);
+              ctx.scale(-1, 1);
+
+              const halfW = totalLabelWidth / 2;
+              const lx = -halfW;
 
               // Rounded rect background
               ctx.fillStyle = 'hsl(142, 71%, 45%)';
               ctx.beginPath();
               const r = 8;
-              ctx.moveTo(labelX + r, labelY);
-              ctx.lineTo(labelX + textWidth + labelPadding * 2 - r, labelY);
-              ctx.quadraticCurveTo(labelX + textWidth + labelPadding * 2, labelY, labelX + textWidth + labelPadding * 2, labelY + r);
-              ctx.lineTo(labelX + textWidth + labelPadding * 2, labelY + labelHeight - r);
-              ctx.quadraticCurveTo(labelX + textWidth + labelPadding * 2, labelY + labelHeight, labelX + textWidth + labelPadding * 2 - r, labelY + labelHeight);
-              ctx.lineTo(labelX + r, labelY + labelHeight);
-              ctx.quadraticCurveTo(labelX, labelY + labelHeight, labelX, labelY + labelHeight - r);
-              ctx.lineTo(labelX, labelY + r);
-              ctx.quadraticCurveTo(labelX, labelY, labelX + r, labelY);
+              ctx.moveTo(lx + r, labelY);
+              ctx.lineTo(lx + totalLabelWidth - r, labelY);
+              ctx.quadraticCurveTo(lx + totalLabelWidth, labelY, lx + totalLabelWidth, labelY + r);
+              ctx.lineTo(lx + totalLabelWidth, labelY + labelHeight - r);
+              ctx.quadraticCurveTo(lx + totalLabelWidth, labelY + labelHeight, lx + totalLabelWidth - r, labelY + labelHeight);
+              ctx.lineTo(lx + r, labelY + labelHeight);
+              ctx.quadraticCurveTo(lx, labelY + labelHeight, lx, labelY + labelHeight - r);
+              ctx.lineTo(lx, labelY + r);
+              ctx.quadraticCurveTo(lx, labelY, lx + r, labelY);
               ctx.closePath();
               ctx.fill();
 
@@ -175,7 +184,9 @@ export function useFaceDetection(profiles: Profile[]) {
 
               // Text
               ctx.fillStyle = '#FFFFFF';
-              ctx.fillText(labelText, labelX + labelPadding, labelY + 22);
+              ctx.fillText(labelText, lx + labelPadding, labelY + 22);
+
+              ctx.restore();
 
               if (lastDetectedRef.current !== matchedProfile.id) {
                 lastDetectedRef.current = matchedProfile.id;
