@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Settings, Monitor, LogOut } from 'lucide-react';
+import { Settings, Monitor, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import itLogo from '@/assets/it-logo.jpg';
 
 export function DashboardHeader() {
   const location = useLocation();
@@ -17,9 +18,7 @@ export function DashboardHeader() {
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary shadow-md">
-          <Shield className="h-5 w-5 text-primary-foreground" />
-        </div>
+        <img src={itLogo} alt="IT Department" className="h-10 w-10 rounded-lg object-cover shadow-md" />
         <div>
           <h1 className="text-lg font-bold leading-tight text-foreground">
             IT Department
