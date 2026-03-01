@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
+import itLogo from '@/assets/it-logo.jpg';
 import { toast } from 'sonner';
 
 export default function Signup() {
@@ -36,9 +37,7 @@ export default function Signup() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-0 shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-md">
-            <Shield className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img src={itLogo} alt="IT Department" className="mx-auto mb-2 h-16 w-16 rounded-xl object-cover shadow-md" />
           <CardTitle className="text-xl">Create Account</CardTitle>
           <CardDescription>Register for the Face Recognition System</CardDescription>
         </CardHeader>
