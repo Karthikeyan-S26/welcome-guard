@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Settings, Monitor, LogOut } from 'lucide-react';
+import { Settings, Monitor, LogOut, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,7 @@ export function DashboardHeader() {
             Admin
           </Link>
         )}
-        {user && (
+        {user ? (
           <Button
             variant="ghost"
             size="sm"
@@ -64,6 +64,14 @@ export function DashboardHeader() {
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
+        ) : (
+          <Link
+            to="/login"
+            className="ml-2 flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <LogIn className="h-4 w-4" />
+            Sign In
+          </Link>
         )}
       </nav>
     </header>
