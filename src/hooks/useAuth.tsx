@@ -27,9 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .single();
-    setRole((data?.role as AppRole) ?? 'user');
+      .eq('user_id', userId);
+    const roles = (data ?? []).map((r) => r.role as AppRole);
+    setRole(roles.includes('admin') ? 'admin' : 'user');
   }, []);
 
   useEffect(() => {
