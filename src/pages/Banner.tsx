@@ -1,5 +1,6 @@
 import bannerBg from "@/assets/tezario-banner.png";
 import itLogo from "@/assets/it-logo.jpg";
+import kLogo from "@/assets/k-logo.png";
 
 const Banner = () => {
   return (
@@ -15,22 +16,30 @@ const Banner = () => {
           className="absolute inset-0 w-full h-full object-cover rounded-lg"
         />
 
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-[#0a1628]/30 rounded-lg" />
+
+        {/* Top & bottom accent lines */}
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#00FFD0] to-transparent rounded-t-lg" />
+        <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#00FFD0] to-transparent rounded-b-lg" />
+
         {/* Overlay content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Top row: logos */}
-          <div className="absolute top-[8%] left-[3%] w-[10%]">
-            <div className="bg-white rounded-full p-1 aspect-square flex items-center justify-center shadow-lg shadow-cyan-500/30">
-              <span className="text-[2.5vw] font-black text-[#0a1628] leading-none" style={{ fontFamily: "serif" }}>
-                K
-              </span>
-            </div>
+          {/* Left – K Logo */}
+          <div className="absolute top-[10%] left-[2.5%] w-[10%] h-[80%] flex items-center justify-center">
+            <img
+              src={kLogo}
+              alt="Kongunadu College Logo"
+              className="max-w-full max-h-full object-contain drop-shadow-[0_0_15px_rgba(0,255,200,0.3)]"
+            />
           </div>
 
-          <div className="absolute top-[5%] right-[3%] w-[12%]">
+          {/* Right – IT Department Logo */}
+          <div className="absolute top-[8%] right-[2.5%] w-[11%] h-[84%] flex items-center justify-center">
             <img
               src={itLogo}
               alt="IT Department Logo"
-              className="w-full h-auto rounded-lg shadow-lg shadow-cyan-500/30"
+              className="max-w-full max-h-full object-contain rounded-lg drop-shadow-[0_0_15px_rgba(0,255,200,0.3)]"
             />
           </div>
 
@@ -43,10 +52,16 @@ const Banner = () => {
               TEZARIO
             </h2>
             <p
-              className="tracking-[0.2em] text-amber-300 drop-shadow-[0_0_15px_rgba(255,215,0,0.4)] mt-1"
+              className="tracking-[0.2em] text-amber-300 drop-shadow-[0_0_15px_rgba(255,215,0,0.4)] mt-1 font-bold"
               style={{ fontSize: "clamp(10px, 1.8vw, 28px)", fontFamily: "'Orbitron', sans-serif" }}
             >
-              NOVA FACE RECOGNITION SYSTEM
+              FACE RECOGNITION SYSTEM
+            </p>
+            <p
+              className="text-[#99CCDD] tracking-[0.12em] mt-2"
+              style={{ fontSize: "clamp(5px, 0.8vw, 11px)" }}
+            >
+              KONGUNADU COLLEGE OF ENGINEERING AND TECHNOLOGY &nbsp;•&nbsp; DEPARTMENT OF INFORMATION TECHNOLOGY
             </p>
           </div>
         </div>
