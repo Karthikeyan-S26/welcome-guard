@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { useProfiles, useCreateProfile, useDeleteProfile, useUpdateProfile } from '@/hooks/useProfiles';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,9 @@ export default function Admin() {
   const [roleType, setRoleType] = useState<string>('staff');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isComputingAll, setIsComputingAll] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = profiles.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -138,6 +141,187 @@ export default function Admin() {
       toast.error('Failed to create profile.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleComputeAllDescriptors = async () => {
+    setIsComputingAll(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      const { data: profilesWithPhoto } = await supabase
+        .from('profiles')
+        .select('*')
+        .not('photo_url', 'is', null);
+
+      if (!profilesWithPhoto || profilesWithPhoto.length === 0) {
+        toast.info('No profiles found that need descriptor generation.');
+        return;
+      }
+
+      toast.info(`Extracting face descriptors for ${profilesWithPhoto.length} profiles...`);
+
+      try {
+        await Promise.all([
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
+      } catch (err: any) {
+        toast.error('Failed to load face detection models');
+        return;
+      }
+
+      for (const profile of profilesWithPhoto) {
+        if (profile.face_descriptor && Array.isArray(profile.face_descriptor) && profile.face_descriptor.length === 128) {
+          // Skip if already has full 128D descriptor array
+          continue;
+        }
+
+        try {
+          const img = await faceapi.fetchImage(profile.photo_url);
+          const detection = await faceapi
+            .detectSingleFace(img, new faceapi.SsdMobilenetv1Options())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+          if (detection) {
+            const descriptor = Array.from(detection.descriptor);
+
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ face_descriptor: descriptor })
+              .eq('id', profile.id);
+
+            if (!updateError) {
+              successCount++;
+            } else {
+              console.error(`Error saving descriptor for ${profile.name}:`, updateError);
+              failCount++;
+            }
+          } else {
+            console.warn(`No face detected for ${profile.name}`);
+            failCount++;
+          }
+        } catch (err) {
+          console.error(`Error processing ${profile.name}:`, err);
+          failCount++;
+        }
+      }
+      toast.success(`Done! ✅ ${successCount} computed, ❌ ${failCount} failed`);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setIsComputingAll(false);
+    }
+  };
+
+  const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsSyncing(true);
+    toast.info(`Syncing folder images... This might take a bit.`);
+
+    let success = 0;
+    let failed = 0;
+
+    try {
+      // 1. Load models first
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+
+      const fileExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Filter by extension
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (!ext || !fileExts.includes(ext)) continue;
+
+        // Get name from parent folder
+        const pathParts = file.webkitRelativePath.split('/');
+        // The path is typically e.g. "dataset/Gokul/img.jpg"
+        if (pathParts.length < 2) continue;
+        const profileName = pathParts[pathParts.length - 2];
+
+        try {
+          // Upload to Supabase Storage
+          const fileName = `${Date.now()}-${file.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from('profile-photos')
+            .upload(fileName, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: urlData } = supabase.storage
+            .from('profile-photos')
+            .getPublicUrl(fileName);
+
+          const photoUrl = urlData.publicUrl;
+
+          let descriptor: number[] | null = null;
+
+          // Generate descriptor instantly to avoid 2-step process
+          try {
+            // We can use an Object URL to parse the file via HTMLImageElement because bufferToImage is harder
+            const objUrl = URL.createObjectURL(file);
+            const img = await faceapi.fetchImage(objUrl);
+            const detection = await faceapi
+              .detectSingleFace(img, new faceapi.SsdMobilenetv1Options())
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+            if (detection) {
+              descriptor = Array.from(detection.descriptor);
+            }
+            URL.revokeObjectURL(objUrl);
+          } catch (e) {
+            console.error(`Failed to extract face for ${profileName}:`, e);
+          }
+
+          // Check if profile exists
+          const { data: existing } = await supabase
+            .from('profiles')
+            .select('id, name, photo_url, face_descriptor')
+            .eq('name', profileName)
+            .maybeSingle();
+
+          if (existing) {
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ photo_url: photoUrl, face_descriptor: descriptor })
+              .eq('id', existing.id);
+            if (updateError) throw updateError;
+          } else {
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                name: profileName,
+                role_type: 'staff',
+                photo_url: photoUrl,
+                face_descriptor: descriptor
+              });
+            if (insertError) throw insertError;
+          }
+          success++;
+        } catch (err) {
+          console.error(`Error processing file ${file.name}:`, err);
+          failed++;
+        }
+      }
+
+      toast.success(`Sync Complete: ✅ ${success} processed, ❌ ${failed} failed`);
+
+    } catch (err: any) {
+      toast.error('Failed to sync dataset: ' + err.message);
+    } finally {
+      setIsSyncing(false);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // Reset
     }
   };
 
@@ -234,10 +418,49 @@ export default function Admin() {
                 Manage registered profiles for face recognition
               </p>
             </div>
-            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Profile
-            </Button>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                // @ts-ignore - webkitdirectory is non-standard but works in modern browsers
+                webkitdirectory="true"
+                directory="true"
+                multiple
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFolderUpload}
+              />
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSyncing}
+                className="gap-2"
+              >
+                {isSyncing ? (
+                  <>Syncing...</>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Sync Local Dataset
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleComputeAllDescriptors}
+                disabled={isComputingAll}
+                className="gap-2"
+              >
+                {isComputingAll ? 'Computing...' : '⚡ Compute All Faces'}
+              </Button>
+
+              <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Profile
+              </Button>
+            </div>
           </div>
 
           {/* Add form */}
@@ -371,11 +594,10 @@ export default function Admin() {
                       <TableCell>{p.designation}</TableCell>
                       <TableCell className="text-muted-foreground">{p.qualification}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          p.role_type === 'staff'
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-accent/10 text-accent-foreground'
-                        }`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${p.role_type === 'staff'
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-accent/10 text-accent-foreground'
+                          }`}>
                           {p.role_type === 'staff' ? 'Staff' : 'Student'}
                         </span>
                       </TableCell>
