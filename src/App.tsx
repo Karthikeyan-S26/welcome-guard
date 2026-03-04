@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 import Banner from "./pages/Banner";
+import BannerPPT from "./pages/BannerPPT";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
               }
             />
             <Route path="/banner" element={<Banner />} />
+            <Route path="/banner-ppt" element={<BannerPPT />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
