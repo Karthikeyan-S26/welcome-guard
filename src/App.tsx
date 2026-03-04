@@ -10,6 +10,7 @@ import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
+import Banner from "./pages/Banner";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/banner" element={<Banner />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
