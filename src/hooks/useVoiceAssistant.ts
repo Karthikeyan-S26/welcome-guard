@@ -116,7 +116,7 @@ export function useVoiceAssistant(detectedProfile: Profile | null, allProfiles: 
         }
     };
 
-    const speakResponse = useCallback((originalText: string) => {
+    const speakResponse = useCallback((originalText: string, isAutoGreeting: boolean = false) => {
         stopSpeaking();
         const textLower = originalText.toLowerCase();
 
@@ -169,7 +169,13 @@ export function useVoiceAssistant(detectedProfile: Profile | null, allProfiles: 
             return;
         }
 
-        // 2. Fallback to default Speech Synthesis if no matching custom static .ogg file is found
+        // If it was an auto-greeting but no custom voice is mapped, NEVER fallback to the AI robot voice.
+        if (isAutoGreeting) {
+            setStatus('idle');
+            return;
+        }
+
+        // 2. Fallback to default Speech Synthesis if no matching custom static .ogg file is found and it is not an auto greeting
         if (!synthRef.current) {
             setStatus('idle');
             return;
@@ -242,7 +248,9 @@ export function useVoiceAssistant(detectedProfile: Profile | null, allProfiles: 
 
                 // We purposefully DO NOT add this to setMessages, so the text chat 
                 // remains empty/unstarted until the user manually invokes the dragon button!
-                speakResponse(greeting);
+
+                // true flag added -> it will ONLY play custom .ogg. No robot AI voice!
+                speakResponse(greeting, true);
             }
         }
     }, [detectedProfile, speakResponse]);
